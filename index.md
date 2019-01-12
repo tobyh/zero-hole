@@ -36,39 +36,55 @@ Download the Raspbian Lite image from the Pi foundation [downloads page](https:/
 
 ## Configure for your network
 
-I mount the card on my Mac. There's only one partition, called boot. Add a new file named `wpa_supplicant.conf` containing the following text
+I mount the card on my Mac. There's only one partition, called boot. I add a new file named `wpa_supplicant.conf` containing the following text
 
-    country=COUNTRY
-    ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-    update_config=1
+````
+{% include_relative wpa_supplicant.conf %}
+````
 
-    network={
-        ssid="SSID"
-        psk="PASSWORD"
-        key_mgmt=WPA-PSK
-    }
-
-Replace `COUNTRY` with your country's two-letter code, `AU` in my case. Fill in your network's name for `SSID`, and your also your password.
+Replace `COUNTRY` with your country's two-letter code, `AU` in my case. Fill in your network's name for `SSID`, and also your wifi password.
 
 To enable ssh on the Pi, create an empty file in the boot volume called `ssh`.
+
+## Enable OTG
+
+This will allow SSH over a USB cable, which is useful if you're going move the Pi between networks and you don't want to have to take out the sd card and write a new `wpa_supplicant.conf` every time.
+
+With the `boot` partition of the sd card still mounted, edit `config.txt` and add the line
+
+````
+dtoverlay=dwc2
+````
+
+Now edit `cmdline.txt` and insert `modules-load=dwc2,g_ether` after `rootwait`. At this point mine now looks like this:
+
+````
+dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=PARTUUID=7ee80803-02 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait modules-load=dwc2,g_ether quiet init=/usr/lib/raspi-config/init_resize.sh
+````
+
+If you ever need to SSH over OTG, you'll now be able to. This [article](https://medium.com/@aallan/setting-up-a-headless-raspberry-pi-zero-3ded0b83f274) by Alasdair Allan explains how.
 
 ## Test the SD card
 
 I eject the SD card and pop it into the Pi. I plug the power supply into the `PWR` port. The Pi takes a while to boot up the first time - give it a couple of minutes.
 
-If all is well, the Pi will now connect automatically to your network. You want to know its local address. You could use a tool like nmap, or look in your router's admin console. I like to just pick up my phone and open the [Fing](https://itunes.apple.com/au/app/fing-network-scanner/id430921107) app. It tells me there's a new host called raspberrypi at `10.1.1.8`.
+If all is well, the Pi will now connect automatically to your network. I pick up my phone and open the [Fing](https://itunes.apple.com/au/app/fing-network-scanner/id430921107) app. It tells me there's a new host called raspberrypi at `10.1.1.8`.
 
 So I can now try to ssh into the Pi from my Mac.
 
-    $ ssh pi@10.1.1.8
+````sh
+$ ssh pi@10.1.1.8
+````
 
 The default password is `raspberry`. It works, great. Now I can shut it down to put it in the case.
 
-    $ sudo shutdown -h now
+````sh
+$ sudo shutdown -h now
+````
 
 # Assembly
 
-Unplug the power and insert the board under the red tab, chip side up. Push down onto the mounts. Here's a video that might help [https://www.youtube.com/watch?v=xjRFtqHAztA](https://www.youtube.com/watch?v=xjRFtqHAztA) if you're unsure. 
+Unplug the power and insert the board under the red tab, chip side up. Push down onto the mounts. Here's a video that might help [https://www.youtube.com/watch?v=xjRFtqHAztA](https://www.youtube.com/watch?v=xjRFtqHAztA) if you're unsure.
 
 If you bought your Pi Zero in a kit, it may have come with a little passive heatsink. You can put that on now if you wish, but I wouldn't bother.
 
@@ -78,18 +94,24 @@ Put the full closed white lid on. Stick on the feet.
 
 Plug in the power again and ssh back into the Pi. Update Raspbian:
 
-    $ sudo apt update
-    $ sudo apt upgrade
+````sh
+$ sudo apt update
+$ sudo apt upgrade
+````
 
 I want this Pi-hole to be as low-power as possible. I can disable HDMI to save a few milliamps. `sudo nano /etc/rc.local` and add the following above `exit 0`
 
-    tvservice -o
+````sh
+tvservice -o
+````
 
 Save a little more power by disabling bluetooth and the activity LED. `sudo nano /boot/config.txt` and add
 
-    dtoverlay=pi3-disable-bt
-    dtparam=act_led_trigger=none
-    dtparam=act_led_activelow=on
+````
+dtoverlay=pi3-disable-bt
+dtparam=act_led_trigger=none
+dtparam=act_led_activelow=on
+````
 
 Now run `sudo raspi-config` and change the following settings
 - `Change User Password`
@@ -102,35 +124,45 @@ Now run `sudo raspi-config` and change the following settings
 
 Let the Pi restart and ssh in again. Try using the hostname you just set, eg.
 
-    $ ssh pi@pihole.local
+````sh
+$ ssh pi@pihole.local
+````
 
 To force sudo to require a password, `sudo nano /etc/sudoers.d/010_pi-nopasswd`
 and change the `pi` entry to:
 
-    pi ALL=(ALL) PASSWD: ALL
+````
+pi ALL=(ALL) PASSWD: ALL
+````
 
 ## Firewall
 
 May as well set up a firewall with `ufw`.
 
-    $ sudo apt install ufw
-    $ sudo ufw limit 22/tcp # ssh
-    $ sudo ufw allow 80/tcp # http for the web ui
-    $ sudo ufw allow 53     # dns
-    $ sudo ufw enable
+````sh
+$ sudo apt install ufw
+$ sudo ufw limit 22/tcp # ssh
+$ sudo ufw allow 80/tcp # http for the web ui
+$ sudo ufw allow 53     # dns
+$ sudo ufw enable
+````
 
 # Install Pi-hole
 
-    curl -sSL https://install.pi-hole.net | bash
+````sh
+curl -sSL https://install.pi-hole.net | bash
+````
 
 At the prompts:
 - Select an upstream provider. Google is fine.
 - Keep the defaults for other settings.
-- Set an admin password for the web UI when prompted.
+- Use the wlan0 interface.
+- Don't install firewall rules.
+- Make a note of the admin password for the web UI.
 
 # Use the Pi-hole for DNS
 
-Devices on the local network can individually be set to use the pi-hole, but you're probably just going to want to setup your router to tell the whole local network about the pi-hole. Go into the router's admin panel, find the DHCP or DNS settings, and enter the Pi's address as the DNS server. While you're there you might want to explicitly instruct the router to always allocate the Pi the same static address.
+Devices on the local network can individually be set to use the pi-hole, but you're probably just going to want to setup your router to tell the whole local network about the pi-hole. Go into the router's admin panel, find the DHCP or DNS settings, and enter the Pi's address as the DNS server. While you're there you might want to explicitly instruct the router to make a DHCP reservation to always give the Pi the same address.
 
 # Pi-hole Configuration
 
@@ -153,9 +185,10 @@ Second, [Steven Black](https://github.com/StevenBlack/) has collated [some hosts
 
 Third, [Chad Mayfield](https://github.com/chadmayfield) has [assembled a list](https://chadmayfield.com/2017/06/29/blocking-porn-with-pihole/) of the top ~ 20,000 porn sites. That could be used as a blocklist; problem is, it doesn't match subdomains. So porn.com is filtered, but not www.porn.com, which makes it ineffective as a blocklist. Pi-hole has regular expression blocking though, so my idea is to turn Chad's list into a list of regexen which will also match against subdomains.
 
-    $ curl https://raw.githubusercontent.com/chadmayfield/my-pihole-blocklists/master/lists/pi_blocklist_porn_top1m.list | sed 's/.*/(^|\\.)&$/' | sudo tee -a /etc/pihole/regex.list
-    $ sudo service pihole-FTL restart
-
+````sh
+$ curl https://raw.githubusercontent.com/chadmayfield/my-pihole-blocklists/master/lists/pi_blocklist_porn_top1m.list | sed 's/.*/(^|\\.)&$/' | sudo tee -a /etc/pihole/regex.list
+$ sudo service pihole-FTL restart
+````
 
 # Whitelisting and Blacklisting
 
@@ -163,81 +196,23 @@ There are some tips for particular sites and services on the Pi-hole wiki at [Wh
 
 Chad Mayfield has a bunch of commonly whitelisted domains in his Pi-hole [install script](https://github.com/chadmayfield/my-pihole-blocklists/blob/master/install.sh). I going to steal that idea and list and do the same:
 
-    $ whitelist=(
-        "clients4.google.com" 
-        "clients3.google.com" 
-        "s.youtube.com"
-        "video-stats.l.google.com"
-        "spclient.wg.spotify.com"
-        "www.msftncsi.com" 
-        "outlook.office365.com" 
-        "products.office.com" 
-        "c.s-microsoft.com" 
-        "i.s-microsoft.com" 
-        "login.live.com"
-        "g.live.com"
-        "dl.delivery.mp.microsoft.com" 
-        "geo-prod.do.dsp.mp.microsoft.com" 
-        "displaycatalog.mp.microsoft.com" 
-        "officeclient.microsoft.com"
-        "s.gateway.messenger.live.com" 
-        "ui.skype.com" 
-        "pricelist.skype.com" 
-        "apps.skype.com" 
-        "m.hotmail.com" 
-        "s.gateway.messenger.live.com" 
-        "sa.symcb.com" 
-        "s1.symcb.com"
-        "s2.symcb.com"
-        "s3.symcb.com"
-        "s4.symcb.com"
-        "s5.symcb.com"
-        "plex.tv" 
-        "tvdb2.plex.tv" 
-        "pubsub.plex.bz" 
-        "proxy.plex.bz" 
-        "proxy02.pop.ord.plex.bz" 
-        "cpms.spop10.ams.plex.bz" 
-        "meta-db-worker02.pop.ric.plex.bz" 
-        "meta.plex.bz" 
-        "tvthemes.plexapp.com.cdn.cloudflare.net" 
-        "tvthemes.plexapp.com" 
-        "106c06cd218b007d-b1e8a1331f68446599e96a4b46a050f5.ams.plex.services" 
-        "meta.plex.tv" 
-        "cpms35.spop10.ams.plex.bz" 
-        "proxy.plex.tv" 
-        "metrics.plex.tv" 
-        "pubsub.plex.tv" 
-        "status.plex.tv" 
-        "www.plex.tv" 
-        "node.plexapp.com" 
-        "nine.plugins.plexapp.com" 
-        "staging.plex.tv" 
-        "app.plex.tv" 
-        "o1.email.plex.tv" 
-        "o2.sg0.plex.tv" 
-        "dashboard.plex.tv"
-        "gravatar.com" 
-        "thetvdb.com" 
-        "themoviedb.com" 
-        "services.sonarr.tv" 
-        "skyhook.sonarr.tv" 
-        "download.sonarr.tv" 
-        "apt.sonarr.tv" 
-        "forums.sonarr.tv"
-    )
-
-    $ pihole whitelist ${whitelist[@]}
+````
+{% include_relative whitelist.sh %}
+````
 
 # Automatic Security Updates
 
 I want this little server to automatically apply security updates. For that I use the `unattended-upgrades` package.
 
-    $ sudo apt install unattended-upgrades update-notifier-common
+````sh
+$ sudo apt install unattended-upgrades update-notifier-common
+````
 
 Now I `sudo nano /etc/apt/apt.conf.d/50unattended-upgrades` and set the following options
 
-    Unattended-Upgrade::Remove-Unused-Dependencies "true";    Unattended-Upgrade::Automatic-Reboot "true";
-    Unattended-Upgrade::Automatic-Reboot-Time "03:30";
+````
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "true";
+````
 
 The results of unattended-upgrades will be logged to `/var/log/unattended-upgrades`.
