@@ -150,7 +150,7 @@ $ sudo ufw enable
 # Install Pi-hole
 
 ````sh
-curl -sSL https://install.pi-hole.net | bash
+$ curl -sSL https://install.pi-hole.net | bash
 ````
 
 At the prompts:
